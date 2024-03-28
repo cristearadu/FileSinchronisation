@@ -89,7 +89,10 @@ source_structure = [
 ]
 
 
-def create_structure(ops, base_path, structure_list):
+def create_structure(ops, base_path: str, structure_list: list):
+    """
+    Recursively creates a directory structure with files based on a given list of structures
+    """
     def create_items(ops, current_path, items):
         for name, content in items.items():
             path = f"{current_path}\\{name}"
