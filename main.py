@@ -12,8 +12,8 @@ Overview
 --------
 This tool is designed to synchronize files and directories from a source to a replica directory, 
 ensuring that the replica is an exact mirror of the source. It achieves this by monitoring changes in the source 
-directory and replicating these changes to the replica directory in real-time. The tool operates across different 
-operating systems, leveraging shell commands for file system operations to maintain compatibility.
+directory and replicating these changes to the replica directory in real-time. 
+Designed to work only on powershell!
 
 Architecture
 -------------
