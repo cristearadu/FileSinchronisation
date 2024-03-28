@@ -79,13 +79,6 @@ source_structure = [
             "subfolder_3_1": {"file10.txt": "Final file"},
         },
     },
-    {
-        "file8.txt": "Almost almost final file",
-        "subfolder_3": {
-            "file9.txt": "Almost final file",
-            "subfolder_3_1": {"file10.txt": "Final file"},
-        },
-    },
 ]
 
 
