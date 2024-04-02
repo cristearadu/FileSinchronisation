@@ -1,83 +1,94 @@
 import threading
-import time
 from terminal_operations import TerminalOperations
-from generate_test_cases import source_structure, create_structure
+from generate_test_cases import source_structure, create_structure, directory_to_dict
 from threading import Event
 
 """
 File Synchronization Tool Documentation
 ========================================
 
-Overview
---------
-This tool is designed to synchronize files and directories from a source to a replica directory, 
-ensuring that the replica is an exact mirror of the source. It achieves this by monitoring changes in the source 
-directory and replicating these changes to the replica directory in real-time. 
-Designed to work only on powershell!
+Overview:
+---------
+This Python script implements a file synchronization tool designed to keep a replica directory in sync with a source 
+directory. By monitoring changes in the source directory and applying them to the replica directory, it ensures 
+that the replica is always an exact mirror of the source. The tool is specifically tailored for PowerShell environments 
+and avoids using the Python `os` module or third-party synchronization libraries, relying instead on the `subprocess` 
+module for executing system commands.
 
-Architecture
+Architecture:
 -------------
-It's centered around two main threads that work concurrently:
+The tool operates through two concurrent threads:
 
-1. Update and Verification Thread: Responsible for updating the structure of the source directory based on predefined 
-test cases or dynamic updates. After each update, it verifies that the changes are accurately reflected in the 
-replica directory. This ensures the integrity of the synchronization process by comparing the expected state of the 
-replica with its actual state after synchronization.
+1. **Update and Verification Thread**: This thread is responsible for updating the source directory's structure based on
+a sequence of predefined test cases or dynamic updates. After updating the source, it verifies that the replica 
+directory accurately reflects these changes. This is crucial for maintaining the integrity of the synchronization 
+process by ensuring the replica directory's state matches the source's expected state.
 
-2. Synchronization Thread: Continually synchronizes the source directory with the replica directory. It listens for 
-signals from the Update and Verification Thread indicating that an update has occurred. Upon receiving a signal, 
-it performs synchronization, ensuring that new and updated files are copied over, and that files and directories no 
-longer present in the source are removed from the replica.
+2. **Synchronization Thread**: This thread is tasked with continually synchronizing the source directory with the 
+replica directory. It listens for signals indicating that an update has occurred in the source directory. 
+Once signaled, it carries out the synchronization process, ensuring that any new or updated files are copied over and 
+that any files or directories no longer present in the source are removed from the replica.
 
-Communication Mechanism
------------------------
-The two threads communicate using a synchronization primitive from Python's `threading` module, specifically an `Event`
-object.
+Communication Mechanism:
+------------------------
+The threads communicate via a synchronization mechanism using Python's `threading.Event` objects. 
+The Update and Verification Thread signals an event upon completing an update and verification cycle. 
+The Synchronization Thread waits for this event to be signaled before proceeding with the synchronization task. 
+This event-based communication allows for efficient and timely synchronization between the source and replica
+directories.
 
-- The Update and Verification Thread sets (signals) the `Event` after completing an update and verification cycle.
-- The Synchronization Thread waits for this event to be set. Once the event is signaled, indicating that an update 
-has occurred, it proceeds with the synchronization task. After completing the synchronization, it clears the event and 
-waits for the next signal.
-
-Purpose
--------
-The purpose of having two threads communicating with each other is to decouple the concerns of updating and verifying 
-the source structure from the task of synchronizing these changes to the replica. This separation of concerns enhances 
-the tool's modularity and scalability. It allows for the continuous and efficient synchronization of directories in 
-environments where the source directory's structure may change frequently.
-
-Usage
------
-To start the synchronization process, simply run the `main.py` script. The script initializes both threads and manages 
-their execution. Ensure to configure the paths for the source and replica directories within the script according to 
-your needs.
-
+Purpose:
+--------
+The design, featuring two communicating threads, aims to separate the concerns of updating and verifying the source 
+directory from synchronizing these changes to the replica. This separation enhances the tool's modularity and 
+scalability, enabling continuous and effective directory synchronization in dynamic environments.
 """
 
 
 update_event = Event()
+sync_completed_event = Event()
 ONGOING = True
 
 
-def update_source_structure(ops, source_path, source_structure):
+def update_source_structure(ops, source_path, source_structure, replica_path):
     """Updates the source structure periodically"""
-    global ONGOING
-    for structure in source_structure:
-        ops.clear_directory(source_path)
-        create_structure(ops, source_path, [structure])
-        update_event.set()
-        time.sleep(5)  # adjust as needed
 
-    update_event.set()
-    ONGOING = False
+    try:
+        global ONGOING
+        for structure in source_structure:
+            ops.clear_directory(source_path)
+            create_structure(ops, source_path, [structure])
+            update_event.set()
+            sync_completed_event.wait()
+            sync_completed_event.clear()
+            replica_structure = directory_to_dict(ops, replica_path)
+            assert structure == replica_structure, \
+                f"Failed to match replica with source!\n Source: {structure}\nReplica: {replica_structure}"
+        update_event.set()
+        ONGOING = False
+
+    except AssertionError as e:
+        print(e)
+        ONGOING = False
+        update_event.set()
+        sync_completed_event.set()
+
+    finally:
+        ONGOING = False
+        update_event.set()
+        sync_completed_event.set()
 
 
 def sync_folders_periodically(ops, source_path, replica_path):
     """Syncs source to replica periodically"""
+    global ONGOING
     while ONGOING:
         update_event.wait()
-        ops.sync_directories(source_path, replica_path)
         update_event.clear()
+
+        if ONGOING:
+            ops.sync_directories(source_path, replica_path)
+            sync_completed_event.set()
 
 
 def main():
@@ -89,7 +100,7 @@ def main():
     ops.create_directory(replica_path)
 
     thread1 = threading.Thread(
-        target=update_source_structure, args=(ops, source_path, source_structure)
+        target=update_source_structure, args=(ops, source_path, source_structure, replica_path)
     )
     thread2 = threading.Thread(
         target=sync_folders_periodically, args=(ops, source_path, replica_path)

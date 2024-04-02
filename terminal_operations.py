@@ -36,6 +36,15 @@ class TerminalOperations(Core):
             )
             return None
 
+    def read_file(self, file_path: str) -> str:
+        """Reads the content of a given file"""
+        cmd = [
+            "powershell",
+            "-Command",
+            f"Get-Content '{file_path}' -Raw",
+        ]
+        return self.execute_command(cmd, f"Read file: {file_path}")
+
     def copy_file(self, source, destination):
         """Copy file from source to destination"""
 
